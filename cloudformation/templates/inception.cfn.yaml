@@ -1,11 +1,10 @@
-# Let's use this to declare what we want in our stack
+AWSTemplateFormatVersion: 2010-09-09
+Description: Configure the initial networking resources to deploy the Ghost blog host
+
 Parameters:
   VpcCidr: 
     Type: String
     Default: 192.168.0.0/16
-  LatestAmiId:
-    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 
 Resources:
   MyGhostVPC:
@@ -20,7 +19,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties: 
       VpcId: !Ref MyGhostVPC
-      CidrBlock: !Ref VpcCidr
+      CidrBlock: !Ref VpcCidr # Just using the entire CIDR for now
       Tags: 
         - Key: name
           Value: Ghost Blog Subnet
@@ -96,41 +95,15 @@ Resources:
       RouteTableId: !Ref MyGhostRouteTable
       SubnetId: !Ref MyGhostSubnet
 
-  MyGhostHostManagementRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: 
-              - ec2.amazonaws.com
-            Action: 
-              - "sts:AssumeRole"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+Outputs:
+  MyGhostSG:
+    Description: Security Group for the ghost host
+    Value: !Ref MyGhostSG
+    Export:
+      Name: PRIMARY-GHOST-SG
 
-  MyGhostHostInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Path: /
-      Roles: 
-        - !Ref MyGhostHostManagementRole
-
-  MyGhostHostInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      IamInstanceProfile: !Ref MyGhostHostInstanceProfile
-      InstanceType: t2.micro
-      ImageId: !Ref LatestAmiId
-      NetworkInterfaces: 
-        - AssociatePublicIpAddress: "true"
-          DeviceIndex: "0"
-          GroupSet:
-            - !Ref MyGhostSG
-          SubnetId: !Ref MyGhostSubnet
-      Tags:
-        - Key: Name
-          Value: Ghost Blog Host Instance
-
+  MyGhostSubnet:
+    Description: Subnet for the ghost host
+    Value: !Ref MyGhostSubnet
+    Export:
+      Name: PRIMARY-GHOST-SUBNET

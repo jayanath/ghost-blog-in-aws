@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Configure the Ghost blog host
+
+# inception.cfn.yaml template should be deployed before this template
+# as it creates the VPC and the rest of the networking resources.
+
+Parameters:
+  # Fetch the latest AMI without hard-coding the image id
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+Resources:
+  # SSM to manage the Ghost host
+  MyGhostHostManagementRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+              - ec2.amazonaws.com
+            Action: 
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  MyGhostHostInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles: 
+        - !Ref MyGhostHostManagementRole
+
+  MyGhostHostInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      IamInstanceProfile: !Ref MyGhostHostInstanceProfile
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet:
+            - Fn::ImportValue: PRIMARY-GHOST-SG
+          SubnetId: 
+            Fn::ImportValue: PRIMARY-GHOST-SUBNET
+      Tags:
+        - Key: Name
+          Value: Ghost Blog Host Instance
+

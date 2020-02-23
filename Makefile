@@ -1,14 +1,36 @@
 REGION=ap-southeast-2
 
-deploy:
-	aws cloudformation $(ACTION)-stack \
+create-inception-stack:
+	aws cloudformation create-stack \
 		--region $(REGION) \
 		--profile blog-admin \
-		--stack-name test-stack-1 \
-		--capabilities CAPABILITY_NAMED_IAM \
-		--template-body file://cloudformation/templates/ghost-blog.cfn.yaml
+		--stack-name $(STACK_NAME) \
+		--template-body file://cloudformation/templates/inception.cfn.yaml
 
-cleanup:
+create-blog-host-stack:
+	aws cloudformation create-stack \
+		--region $(REGION) \
+		--profile blog-admin \
+		--stack-name $(STACK_NAME) \
+		--capabilities CAPABILITY_NAMED_IAM \
+		--template-body file://cloudformation/templates/ghost-blog-setup.cfn.yaml
+
+update-inception-stack:
+	aws cloudformation update-stack \
+		--region $(REGION) \
+		--profile blog-admin \
+		--stack-name $(STACK_NAME) \
+		--template-body file://cloudformation/templates/inception.cfn.yaml
+
+update-blog-host-stack:
+	aws cloudformation update-stack \
+		--region $(REGION) \
+		--profile blog-admin \
+		--stack-name $(STACK_NAME) \
+		--capabilities CAPABILITY_NAMED_IAM \
+		--template-body file://cloudformation/templates/ghost-blog-setup.cfn.yaml
+
+delete-stack:
 	aws cloudformation delete-stack \
 		--profile blog-admin \
-		--stack-name test-stack-1
+		--stack-name $(STACK_NAME)
