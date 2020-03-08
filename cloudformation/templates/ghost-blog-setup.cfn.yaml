@@ -194,21 +194,29 @@ Resources:
         Comment: 'Hosted zone for jayforweb.com test domain'
       Name: 'jayforweb.com'
 
-  MyGhostRecordSetGroup:
-    Type: AWS::Route53::RecordSetGroup
+  MyGhostMainRecordSet:
+    DependsOn: MyGhostHostedZone
+    Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId : !Ref MyGhostHostedZone
-      RecordSets:
-      - Name: jayforweb.com.
-        ResourceRecords: 
-        - !GetAtt MyGhostHostInstance.PublicIp
-        TTL: '300'
-        Type: A
-      - Name: www.jayforweb.com.
-        Type: A
-        AliasTarget:
-          HostedZoneId: !Ref MyGhostHostedZone
-          DNSName: jayforweb.com
+      Name: jayforweb.com
+      ResourceRecords: 
+      - !GetAtt MyGhostHostInstance.PublicIp
+      TTL: '300'
+      Type: A
+
+  # TODO: need to check again about how to add www.jayforweb.com as an alias to jayforweb.com
+  # This can be done on console, but it gives an error here.
+
+  # MyGhostAliasRecordSet:
+  #   DependsOn: MyGhostMainRecordSet
+  #   Type: AWS::Route53::RecordSet
+  #   Properties:
+  #     Name: www.jayforweb.com
+  #     Type: A
+  #     AliasTarget:
+  #       HostedZoneId: !Ref MyGhostHostedZone
+  #       DNSName: jayforweb.com
 
 Outputs:
   InstanceId:
