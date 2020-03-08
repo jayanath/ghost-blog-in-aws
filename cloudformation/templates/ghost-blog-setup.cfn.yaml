@@ -43,42 +43,120 @@ Resources:
           files:
             "/data/traefik/docker-compose.yaml":
               content: !Sub |
-                version: '3'
+                version: "3"
+                networks:
+                  web:
+                    external: true
 
                 services:
-                  reverse-proxy:
-                    # The official v2 Traefik docker image
+                  traefik:
                     image: traefik:alpine
-                    # Enables the web UI and tells Traefik to listen to docker
-                    command: --api.insecure=true --providers.docker
+                    restart: always
                     ports:
-                      # The HTTP port
                       - "80:80"
-                      # The Web UI (enabled by --api.insecure=true)
-                      - "8080:8080"
+                      - "443:443"
                     volumes:
-                      # So that Traefik can listen to the Docker events
                       - /var/run/docker.sock:/var/run/docker.sock
+                      - /data/traefik/traefik.toml:/traefik.toml
+                      - /data/traefik/acme.json:/acme.json
+                    labels:
+                      - traefik.backend=traefik
+                      - traefik.enable=false
+                    networks:
+                      - web
+
+                  ghost:
+                    image: ghost:alpine
+                    restart: always
+                    environment:
+                      - url=https://jayforweb.com
+                    volumes:
+                      - /data/blogdir:/var/lib/ghost/content
+                    labels:
+                      - traefik.backend=friendlyghost
+                      - traefik.docker.network=web
+                      - traefik.frontend.rule=Host:jayforweb.com
+                      - traefik.port=2368
+                    networks:
+                      - web
               mode: '000644'
               owner: root
               group: root
 
-          commands:
-            "1":
+            "/data/traefik/traefik.toml":
+              content: !Sub |
+                logLevel = "ERROR"
+
+                defaultEntryPoints = ["http", "https"]
+
+                [entryPoints]
+                [entryPoints.http]
+                address = ":80"
+
+                [entryPoints.http.redirect]
+                entryPoint = "https"
+                permanent = true
+
+                [entryPoints.https]
+                address = ":443"
+
+                [entryPoints.https.redirect]
+                regex = "^https://www.(.*)"
+                replacement = "https://$1"
+                permanent = true
+
+                [entryPoints.https.tls]
+                compress = true
+
+                [acme]
+                email = "jayanath@gmail.com"
+                storage = "acme.json"
+                entryPoint = "https"
+
+                [acme.tlsChallenge]
+                onHostRule = true
+
+                [acme.httpChallenge]
+                entryPoint = "http"
+
+                [[acme.domains]]
+                main = "jayforweb.com"
+                sans = ["www.jayforweb.com"]
+
+                [docker]
+                endpoint = "unix:///var/run/docker.sock"
+                domain = "jayforweb.com"
+                watch = true
+                network = "web"
+
+              mode: '000644'
+              owner: root
+              group: root
+
+          commands:            
+            "a":
+              command: "touch /data/traefik/acme.json"
+            "b":
+              command: "chmod 600 /data/traefik/acme.json"
+            "c":
               command: "sudo yum update -y"
-            "2":
+            "d":
               command: "yes | sudo amazon-linux-extras install docker"
-            "3":
+            "e":
               command: "sudo service docker start"
-            "4":
+            "f":
               command: "sudo usermod -a -G docker ec2-user"
-            "5":
+            "g":
               command: "sudo yum install -y git"
-            "6":
+            "h":
               command: "curl -L https://github.com/docker/compose/releases/download/1.25.4/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose"
-            "7":
+            "i":
               command: "chmod +x /usr/local/bin/docker-compose" 
-            "8":
+            "j":
+              command: "sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose"
+            "k":
+              command: "docker network create web"
+            "l":
               command: "docker-compose up -d"
               cwd: "/data/traefik/"
 
@@ -108,6 +186,29 @@ Resources:
             /opt/aws/bin/cfn-hup || error_exit 'Failed to start cfn-hup'
             # All done so signal success
             /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource MyGhostHostInstance --region ${AWS::Region}
+
+  MyGhostHostedZone: 
+    Type: "AWS::Route53::HostedZone"
+    Properties: 
+      HostedZoneConfig: 
+        Comment: 'Hosted zone for jayforweb.com test domain'
+      Name: 'jayforweb.com'
+
+  MyGhostRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId : !Ref MyGhostHostedZone
+      RecordSets:
+      - Name: jayforweb.com.
+        ResourceRecords: 
+        - !GetAtt MyGhostHostInstance.PublicIp
+        TTL: '300'
+        Type: A
+      - Name: www.jayforweb.com.
+        Type: A
+        AliasTarget:
+          HostedZoneId: !Ref MyGhostHostedZone
+          DNSName: jayforweb.com
 
 Outputs:
   InstanceId:

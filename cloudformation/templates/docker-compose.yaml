@@ -1,0 +1,36 @@
+version: "3"
+networks:
+  web:
+    external: true
+
+services:
+  traefik:
+    image: traefik:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /data/traefik/traefik.toml:/traefik.toml
+      - /data/traefik/acme.json:/acme.json
+    labels:
+      - traefik.backend=traefik
+      - traefik.enable=false
+    networks:
+      - web
+
+  ghost:
+    image: ghost:alpine
+    restart: always
+    environment:
+      - url=http://jayforweb.com
+    volumes:
+      - /data/blogdir:/var/lib/ghost/content
+    labels:
+      - traefik.backend=friendlyghost
+      - traefik.docker.network=web
+      - traefik.frontend.rule=Host:jayforweb.com
+      - traefik.port=2368
+    networks:
+      - web
