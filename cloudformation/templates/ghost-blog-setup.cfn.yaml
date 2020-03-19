@@ -20,9 +20,9 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: 
+              Service:
               - ec2.amazonaws.com
-            Action: 
+            Action:
               - "sts:AssumeRole"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
@@ -31,7 +31,7 @@ Resources:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Path: /
-      Roles: 
+      Roles:
         - !Ref MyGhostHostManagementRole
 
   MyGhostHostInstance:
@@ -41,6 +41,19 @@ Resources:
       AWS::CloudFormation::Init:
         config:
           files:
+            "/data/traefik/ghost.env":
+              content: !Sub |
+                mail__transport=SMTP
+                mail__from=Jay For Web <jayforweb@mg.jayforweb.com>
+                mail__options__service=mailgun
+                mail__options__auth__user=my-mailgun-user
+                mail__options__auth__pass=my-super-secret-password
+                url=https://jayforweb.com
+
+              mode: '000600'
+              owner: root
+              group: root
+
             "/data/traefik/docker-compose.yaml":
               content: !Sub |
                 version: "3"
@@ -68,8 +81,8 @@ Resources:
                   ghost:
                     image: ghost:alpine
                     restart: always
-                    environment:
-                      - url=https://jayforweb.com
+                    env_file:
+                      - /data/traefik/ghost.env
                     volumes:
                       - /data/blogdir:/var/lib/ghost/content
                     labels:
@@ -133,7 +146,7 @@ Resources:
               owner: root
               group: root
 
-          commands:            
+          commands:
             "a":
               command: "touch /data/traefik/acme.json"
             "b":
@@ -151,7 +164,7 @@ Resources:
             "h":
               command: "curl -L https://github.com/docker/compose/releases/download/1.25.4/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose"
             "i":
-              command: "chmod +x /usr/local/bin/docker-compose" 
+              command: "chmod +x /usr/local/bin/docker-compose"
             "j":
               command: "sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose"
             "k":
@@ -164,12 +177,12 @@ Resources:
       IamInstanceProfile: !Ref MyGhostHostInstanceProfile
       InstanceType: t2.micro
       ImageId: !Ref LatestAmiId
-      NetworkInterfaces: 
+      NetworkInterfaces:
         - AssociatePublicIpAddress: "true"
           DeviceIndex: "0"
           GroupSet:
             - Fn::ImportValue: PRIMARY-GHOST-SG
-          SubnetId: 
+          SubnetId:
             Fn::ImportValue: PRIMARY-GHOST-SUBNET
       Tags:
         - Key: Name
@@ -182,15 +195,15 @@ Resources:
             yum update -y aws-cfn-bootstrap
             # Start cfn-init
             /opt/aws/bin/cfn-init -s ${AWS::StackId} -r MyGhostHostInstance --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
-            # Start up the cfn-hup daemon to listen for changes to the EC2 instance metadata            
+            # Start up the cfn-hup daemon to listen for changes to the EC2 instance metadata
             /opt/aws/bin/cfn-hup || error_exit 'Failed to start cfn-hup'
             # All done so signal success
             /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource MyGhostHostInstance --region ${AWS::Region}
 
-  MyGhostHostedZone: 
+  MyGhostHostedZone:
     Type: "AWS::Route53::HostedZone"
-    Properties: 
-      HostedZoneConfig: 
+    Properties:
+      HostedZoneConfig:
         Comment: 'Hosted zone for jayforweb.com test domain'
       Name: 'jayforweb.com'
 
@@ -200,7 +213,7 @@ Resources:
     Properties:
       HostedZoneId : !Ref MyGhostHostedZone
       Name: jayforweb.com
-      ResourceRecords: 
+      ResourceRecords:
       - !GetAtt MyGhostHostInstance.PublicIp
       TTL: '300'
       Type: A
