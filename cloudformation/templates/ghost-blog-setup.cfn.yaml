@@ -10,6 +10,11 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 
+  myGhostBucket:
+    Type: String
+    Default: ''
+
+
 Resources:
   # SSM to manage the Ghost host
   MyGhostHostManagementRole:
@@ -26,6 +31,19 @@ Resources:
               - "sts:AssumeRole"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      # Path: /
+      # Policies:
+      #   - PolicyName: root
+      #     PolicyDocument:
+      #       Version: 2012-10-17
+      #       Statement:
+      #         - Effect: Allow
+      #           Action:
+      #             - s3:Get*
+      #             - s3:List*
+      #           Resource:
+      #             - !Ref myGhostBucket
+      #             - !Ref myGhostBucket/*
 
   MyGhostHostInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -42,6 +60,13 @@ Resources:
         config:
           files:
             "/data/traefik/ghost.env":
+              source:
+                Fn::Join:
+                  - ""
+                  -
+                    - "http://s3.amazonaws.com/"
+                    - Ref: "myGhostBucket"
+                    - "/ghost.env"
               content: !Sub |
                 mail__transport=SMTP
                 mail__from=Jay For Web <jayforweb@mg.jayforweb.com>
@@ -53,6 +78,7 @@ Resources:
               mode: '000600'
               owner: root
               group: root
+              authentication: "rolebased"
 
             "/data/traefik/docker-compose.yaml":
               content: !Sub |
@@ -172,6 +198,14 @@ Resources:
             "l":
               command: "docker-compose up -d"
               cwd: "/data/traefik/"
+
+      AWS::CloudFormation::Authentication:
+        rolebased:
+          type: "S3"
+          buckets:
+            - "myGhostBucket"
+          roleName:
+            Ref: "MyGhostHostManagementRole"
 
     Properties:
       IamInstanceProfile: !Ref MyGhostHostInstanceProfile

@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Configure the initial networking resources to deploy the Ghost blog host
 
 Parameters:
-  VpcCidr: 
+  VpcCidr:
     Type: String
     Default: 192.168.0.0/16
   PublicSubnetCidr:
@@ -12,28 +12,28 @@ Parameters:
 Resources:
   MyGhostVPC:
     Type: AWS::EC2::VPC
-    Properties: 
+    Properties:
       CidrBlock: !Ref VpcCidr
-      Tags: 
+      Tags:
         - Key: name
           Value: Ghost Blog VPC
 
   MyGhostSubnet:
     Type: AWS::EC2::Subnet
-    Properties: 
+    Properties:
       VpcId: !Ref MyGhostVPC
       CidrBlock: !Ref PublicSubnetCidr
-      Tags: 
+      Tags:
         - Key: name
           Value: Ghost Blog Subnet
 
   MyGhostSG:
     Type: AWS::EC2::SecurityGroup
-    Properties: 
+    Properties:
       GroupDescription: SecurityGroup for the Ghost Blog
       GroupName: MyGhostSG
       VpcId: !Ref MyGhostVPC
-      SecurityGroupIngress: 
+      SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
@@ -41,8 +41,8 @@ Resources:
         - FromPort: '443'
           IpProtocol: tcp
           ToPort: '443'
-          CidrIp: 0.0.0.0/0  
-      Tags: 
+          CidrIp: 0.0.0.0/0
+      Tags:
         - Key: name
           Value: Ghost Blog SG
 
@@ -62,7 +62,7 @@ Resources:
   MyGhostRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref MyGhostVPC 
+      VpcId: !Ref MyGhostVPC
       Tags:
       - Key: name
         Value: Ghost Blog RouteTable
@@ -73,12 +73,18 @@ Resources:
       RouteTableId: !Ref MyGhostRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref MyGhostIGW
-  
+
   MyGhostSubnetToRoutTableAss:
     Type: "AWS::EC2::SubnetRouteTableAssociation"
     Properties:
       RouteTableId: !Ref MyGhostRouteTable
       SubnetId: !Ref MyGhostSubnet
+
+  MyGhostS3Bucket:
+    Type: AWS::S3::Bucket
+    #DeletionPolicy: Retain
+    Properties:
+      BucketName: ghost.jayforweb.com
 
 Outputs:
   MyGhostSG:
