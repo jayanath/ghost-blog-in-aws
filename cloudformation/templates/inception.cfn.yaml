@@ -8,6 +8,9 @@ Parameters:
   PublicSubnetCidr:
     Type: String
     Default: 192.168.0.0/20 # Have 16 subnets for us to go multi tier multi-az if needed.
+  BucketName:
+    Type: String
+    Default: ghost.jayforweb.com
 
 Resources:
   MyGhostVPC:
@@ -84,9 +87,39 @@ Resources:
     Type: AWS::S3::Bucket
     #DeletionPolicy: Retain
     Properties:
-      BucketName: ghost.jayforweb.com
+      BucketName: !Ref BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MyGhostS3Bucket
+      PolicyDocument:
+        Statement:
+          -
+            Sid: GhostBucketAccess
+            Action:
+              - s3:*
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub ${AWS::AccountId}
+            Resource:
+              - !Sub "arn:aws:s3:::${BucketName}"
 
 Outputs:
+  MyGhostS3Bucket:
+    Description: S3 Bucket for config file storage and backups
+    Value: !Ref MyGhostS3Bucket
+
   MyGhostSG:
     Description: Security Group for the ghost host
     Value: !Ref MyGhostSG
