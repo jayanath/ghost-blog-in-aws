@@ -1,6 +1,6 @@
 REGION=ap-southeast-2
 # Change if your profile name is different
-PROFILE=ghostdev
+PROFILE=ghostroot01
 
 create-inception-stack:
 	aws cloudformation create-stack \

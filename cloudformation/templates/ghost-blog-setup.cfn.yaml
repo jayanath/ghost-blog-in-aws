@@ -12,7 +12,7 @@ Parameters:
 
   myGhostBucket:
     Type: String
-    Default: ''
+    Default: 'ghost.jayforweb.com'
 
 
 Resources:
@@ -60,13 +60,6 @@ Resources:
         config:
           files:
             "/data/traefik/ghost.env":
-              source:
-                Fn::Join:
-                  - ""
-                  -
-                    - "http://s3.amazonaws.com/"
-                    - Ref: "myGhostBucket"
-                    - "/ghost.env"
               content: !Sub |
                 mail__transport=SMTP
                 mail__from=Jay For Web <jayforweb@mg.jayforweb.com>
@@ -78,96 +71,102 @@ Resources:
               mode: '000600'
               owner: root
               group: root
-              authentication: "rolebased"
 
             "/data/traefik/docker-compose.yaml":
               content: !Sub |
                 version: "3"
                 networks:
-                  web:
-                    external: true
+                  external_network:
+                  internal_network:
+                    internal: true
 
                 services:
                   traefik:
-                    image: traefik:alpine
+                    image: traefik
                     restart: always
+                    command:
+                      - "--log.level=DEBUG"
+                      - "--api.dashboard=true"
+                      - "--entrypoints.web.address=:80"
+                      - "--entrypoints.websecure.address=:443"
+                      - "--providers.docker=true"
+                      - "--providers.docker.exposedbydefault=false"
+                      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+                      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+                      - "--certificatesresolvers.letsencrypt.acme.email=jayanath@gmail.com"
+                      - "--certificatesresolvers.letsencrypt.acme.storage=acme.json"
                     ports:
                       - "80:80"
                       - "443:443"
                     volumes:
-                      - /var/run/docker.sock:/var/run/docker.sock
-                      - /data/traefik/traefik.toml:/traefik.toml
+                      - /var/run/docker.sock:/var/run/docker.sock:ro
                       - /data/traefik/acme.json:/acme.json
                     labels:
-                      - traefik.backend=traefik
-                      - traefik.enable=false
+                      - traefik.enable=true
+                      # Dashboard
+                      - traefik.http.routers.traefik.rule=Host(`dashboard.jayforweb.com`)
+                      - traefik.http.routers.traefik.service=api@internal
+                      - traefik.http.routers.traefik.tls.certresolver=letsencrypt
+                      - traefik.http.routers.traefik.entrypoints=websecure
+                      - traefik.http.routers.traefik.middlewares=dashboardauth
+                      - traefik.http.middlewares.dashboardauth.basicauth.users=admin:$$apr1$$EcrvPa/i$$r4.HLJnYw/FNaGLCoIyPI1
+                      # HTTPS Redirect
+                      - traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)
+                      - traefik.http.routers.http-catchall.entrypoints=web
+                      - traefik.http.routers.http-catchall.middlewares=redirect-to-https@docker
+                      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+
                     networks:
-                      - web
+                      - external_network
 
                   ghost:
                     image: ghost:alpine
                     restart: always
-                    env_file:
-                      - /data/traefik/ghost.env
+                    environment:
+                      - url=http://jayforweb.com
                     volumes:
                       - /data/blogdir:/var/lib/ghost/content
                     labels:
-                      - traefik.backend=friendlyghost
-                      - traefik.docker.network=web
-                      - traefik.frontend.rule=Host:jayforweb.com
-                      - traefik.port=2368
+                      - traefik.enable=true
+                      - traefik.http.routers.ghost.rule=Host(`jayforweb.com`)
+                      - traefik.http.routers.ghost.entrypoints=websecure
+                      - traefik.http.routers.ghost.tls.certresolver=letsencrypt
+                      - traefik.http.services.ghost.loadbalancer.server.port=2368
                     networks:
-                      - web
-              mode: '000644'
-              owner: root
-              group: root
+                      - external_network
 
-            "/data/traefik/traefik.toml":
-              content: !Sub |
-                logLevel = "ERROR"
+                  commento:
+                    image: registry.gitlab.com/commento/commento
+                    restart: always
+                    environment:
+                      COMMENTO_ORIGIN: http://commento.jayforweb.com
+                      COMMENTO_POSTGRES: postgres://postgres:postgres@db:5432/commento?sslmode=disable
+                      # COMMENTO_FORBID_NEW_OWNERS: false
+                    depends_on:
+                      - db
+                    labels:
+                      - traefik.enable=true
+                      - traefik.http.routers.commento.rule=Host(`commento.jayforweb.com`)
+                      - traefik.http.routers.commento.entrypoints=websecure
+                      - traefik.http.routers.commento.tls.certresolver=letsencrypt
+                      #- traefik.http.services.commento.loadbalancer.server.port=5535
+                    networks:
+                      - external_network
+                      - internal_network
 
-                defaultEntryPoints = ["http", "https"]
-
-                [entryPoints]
-                [entryPoints.http]
-                address = ":80"
-
-                [entryPoints.http.redirect]
-                entryPoint = "https"
-                permanent = true
-
-                [entryPoints.https]
-                address = ":443"
-
-                [entryPoints.https.redirect]
-                regex = "^https://www.(.*)"
-                replacement = "https://$1"
-                permanent = true
-
-                [entryPoints.https.tls]
-                compress = true
-
-                [acme]
-                email = "jayanath@gmail.com"
-                storage = "acme.json"
-                entryPoint = "https"
-
-                [acme.tlsChallenge]
-                onHostRule = true
-
-                [acme.httpChallenge]
-                entryPoint = "http"
-
-                [[acme.domains]]
-                main = "jayforweb.com"
-                sans = ["www.jayforweb.com"]
-
-                [docker]
-                endpoint = "unix:///var/run/docker.sock"
-                domain = "jayforweb.com"
-                watch = true
-                network = "web"
-
+                  db:
+                    image: postgres
+                    restart: always
+                    environment:
+                      POSTGRES_DB: commento
+                      POSTGRES_USER: postgres
+                      POSTGRES_PASSWORD: postgres
+                    networks:
+                      - internal_network
+                    volumes:
+                      - /data/commento/data:/var/lib/postgresql/data
+                    labels:
+                      - traefik.enable=false
               mode: '000644'
               owner: root
               group: root
@@ -194,8 +193,10 @@ Resources:
             "j":
               command: "sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose"
             "k":
-              command: "docker network create web"
+              command: "docker network create external_network"
             "l":
+              command: "docker network create internal_network"
+            "m":
               command: "docker-compose up -d"
               cwd: "/data/traefik/"
 
@@ -252,18 +253,16 @@ Resources:
       TTL: '300'
       Type: A
 
-  # TODO: need to check again about how to add www.jayforweb.com as an alias to jayforweb.com
-  # This can be done on console, but it gives an error here.
-
-  # MyGhostAliasRecordSet:
-  #   DependsOn: MyGhostMainRecordSet
-  #   Type: AWS::Route53::RecordSet
-  #   Properties:
-  #     Name: www.jayforweb.com
-  #     Type: A
-  #     AliasTarget:
-  #       HostedZoneId: !Ref MyGhostHostedZone
-  #       DNSName: jayforweb.com
+  MyGhostSubDomainRecordSet:
+    DependsOn: MyGhostHostedZone
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId : !Ref MyGhostHostedZone
+      Name: "*.jayforweb.com"
+      ResourceRecords:
+        - !GetAtt MyGhostHostInstance.PublicIp
+      TTL: '300'
+      Type: A
 
 Outputs:
   InstanceId:
