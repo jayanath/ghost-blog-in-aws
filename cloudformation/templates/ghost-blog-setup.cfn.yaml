@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Configure the Ghost blog host
 
 # inception.cfn.yaml template should be deployed before this template
-# as it creates the VPC and the rest of the networking resources.
+# as it creates the Hosted Zone, VPC and the rest of the networking resources.
 
 Parameters:
   # Fetch the latest AMI without hard-coding the image id
@@ -31,19 +31,8 @@ Resources:
               - "sts:AssumeRole"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-      # Path: /
-      # Policies:
-      #   - PolicyName: root
-      #     PolicyDocument:
-      #       Version: 2012-10-17
-      #       Statement:
-      #         - Effect: Allow
-      #           Action:
-      #             - s3:Get*
-      #             - s3:List*
-      #           Resource:
-      #             - !Ref myGhostBucket
-      #             - !Ref myGhostBucket/*
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
 
   MyGhostHostInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -55,148 +44,37 @@ Resources:
   MyGhostHostInstance:
     Type: AWS::EC2::Instance
     Metadata:
-      Comment: Install docker, ghost and traefik
+      Comment: Install docker, ghost, traefik, commento
       AWS::CloudFormation::Init:
         config:
-          files:
-            "/data/traefik/ghost.env":
-              content: !Sub |
-                mail__transport=SMTP
-                mail__from=Jay For Web <jayforweb@mg.jayforweb.com>
-                mail__options__service=mailgun
-                mail__options__auth__user=my-mailgun-user
-                mail__options__auth__pass=my-super-secret-password
-                url=https://jayforweb.com
-
-              mode: '000600'
-              owner: root
-              group: root
-
-            "/data/traefik/docker-compose.yaml":
-              content: !Sub |
-                version: "3"
-                networks:
-                  external_network:
-                  internal_network:
-                    internal: true
-
-                services:
-                  traefik:
-                    image: traefik
-                    restart: always
-                    command:
-                      - "--log.level=DEBUG"
-                      - "--api.dashboard=true"
-                      - "--entrypoints.web.address=:80"
-                      - "--entrypoints.websecure.address=:443"
-                      - "--providers.docker=true"
-                      - "--providers.docker.exposedbydefault=false"
-                      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-                      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-                      - "--certificatesresolvers.letsencrypt.acme.email=jayanath@gmail.com"
-                      - "--certificatesresolvers.letsencrypt.acme.storage=acme.json"
-                    ports:
-                      - "80:80"
-                      - "443:443"
-                    volumes:
-                      - /var/run/docker.sock:/var/run/docker.sock:ro
-                      - /data/traefik/acme.json:/acme.json
-                    labels:
-                      - traefik.enable=true
-                      # Dashboard
-                      - traefik.http.routers.traefik.rule=Host(`dashboard.jayforweb.com`)
-                      - traefik.http.routers.traefik.service=api@internal
-                      - traefik.http.routers.traefik.tls.certresolver=letsencrypt
-                      - traefik.http.routers.traefik.entrypoints=websecure
-                      - traefik.http.routers.traefik.middlewares=dashboardauth
-                      - traefik.http.middlewares.dashboardauth.basicauth.users=admin:$$apr1$$EcrvPa/i$$r4.HLJnYw/FNaGLCoIyPI1
-                      # HTTPS Redirect
-                      - traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)
-                      - traefik.http.routers.http-catchall.entrypoints=web
-                      - traefik.http.routers.http-catchall.middlewares=redirect-to-https@docker
-                      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
-
-                    networks:
-                      - external_network
-
-                  ghost:
-                    image: ghost:alpine
-                    restart: always
-                    environment:
-                      - url=http://jayforweb.com
-                    volumes:
-                      - /data/blogdir:/var/lib/ghost/content
-                    labels:
-                      - traefik.enable=true
-                      - traefik.http.routers.ghost.rule=Host(`jayforweb.com`)
-                      - traefik.http.routers.ghost.entrypoints=websecure
-                      - traefik.http.routers.ghost.tls.certresolver=letsencrypt
-                      - traefik.http.services.ghost.loadbalancer.server.port=2368
-                    networks:
-                      - external_network
-
-                  commento:
-                    image: registry.gitlab.com/commento/commento
-                    restart: always
-                    environment:
-                      COMMENTO_ORIGIN: http://commento.jayforweb.com
-                      COMMENTO_POSTGRES: postgres://postgres:postgres@db:5432/commento?sslmode=disable
-                      # COMMENTO_FORBID_NEW_OWNERS: false
-                    depends_on:
-                      - db
-                    labels:
-                      - traefik.enable=true
-                      - traefik.http.routers.commento.rule=Host(`commento.jayforweb.com`)
-                      - traefik.http.routers.commento.entrypoints=websecure
-                      - traefik.http.routers.commento.tls.certresolver=letsencrypt
-                      #- traefik.http.services.commento.loadbalancer.server.port=5535
-                    networks:
-                      - external_network
-                      - internal_network
-
-                  db:
-                    image: postgres
-                    restart: always
-                    environment:
-                      POSTGRES_DB: commento
-                      POSTGRES_USER: postgres
-                      POSTGRES_PASSWORD: postgres
-                    networks:
-                      - internal_network
-                    volumes:
-                      - /data/commento/data:/var/lib/postgresql/data
-                    labels:
-                      - traefik.enable=false
-              mode: '000644'
-              owner: root
-              group: root
-
           commands:
-            "a":
-              command: "touch /data/traefik/acme.json"
-            "b":
-              command: "chmod 600 /data/traefik/acme.json"
-            "c":
+            "lets encrypt":
+              command: "sudo touch /data/traefik/acme.json"
+            "copy configs":
+              command: "sudo aws s3 cp s3://ghost.jayforweb.com/blog/config/ /data/traefik/ --recursive"
+            "change config permissions":
+              command: "sudo chmod 600 /data/traefik/*.*"
+            "update packages":
               command: "sudo yum update -y"
-            "d":
+            "install docker":
               command: "yes | sudo amazon-linux-extras install docker"
-            "e":
+            "start docker":
               command: "sudo service docker start"
-            "f":
+            "add ec2 user to docker group":
               command: "sudo usermod -a -G docker ec2-user"
-            "g":
+            "install git":
               command: "sudo yum install -y git"
-            "h":
+            "download docker-compose":
               command: "curl -L https://github.com/docker/compose/releases/download/1.25.4/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose"
-            "i":
+            "make docker-compose executable":
               command: "chmod +x /usr/local/bin/docker-compose"
-            "j":
+            "create a symlink to docker-compose":
               command: "sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose"
-            "k":
+            "create external-network":
               command: "docker network create external_network"
-            "l":
+            "create internal-network":
               command: "docker network create internal_network"
-            "m":
+            "start all":
               command: "docker-compose up -d"
               cwd: "/data/traefik/"
 
@@ -236,7 +114,6 @@ Resources:
             /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource MyGhostHostInstance --region ${AWS::Region}
 
   MyGhostMainRecordSet:
-    DependsOn: MyGhostHostedZone
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneName :
@@ -248,7 +125,6 @@ Resources:
       Type: A
 
   MyGhostSubDomainRecordSet:
-    DependsOn: MyGhostHostedZone
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneName :
