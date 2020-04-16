@@ -9,7 +9,7 @@ services:
     image: traefik
     restart: always
     command:
-      - "--log.level=DEBUG"
+      - "--log.level=ERROR"
       - "--api.dashboard=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
@@ -46,8 +46,8 @@ services:
   ghost:
     image: ghost:alpine
     restart: always
-    environment:
-      - url=http://jayforweb.com
+    env_file:
+      - /data/traefik/ghost.env
     volumes:
       - /data/blogdir:/var/lib/ghost/content
     labels:
@@ -62,10 +62,8 @@ services:
   commento:
     image: registry.gitlab.com/commento/commento
     restart: always
-    environment:
-      COMMENTO_ORIGIN: http://commento.jayforweb.com
-      COMMENTO_POSTGRES: postgres://postgres:postgres@db:5432/commento?sslmode=disable
-      # COMMENTO_FORBID_NEW_OWNERS: false
+    env_file:
+      - /data/traefik/commento.env
     depends_on:
       - db
     labels:
@@ -73,7 +71,6 @@ services:
       - traefik.http.routers.commento.rule=Host(`commento.jayforweb.com`)
       - traefik.http.routers.commento.entrypoints=websecure
       - traefik.http.routers.commento.tls.certresolver=letsencrypt
-      #- traefik.http.services.commento.loadbalancer.server.port=5535
     networks:
       - external_network
       - internal_network

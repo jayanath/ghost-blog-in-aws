@@ -8,6 +8,9 @@ Parameters:
   PublicSubnetCidr:
     Type: String
     Default: 192.168.0.0/20 # Have 16 subnets for us to go multi tier multi-az if needed.
+  HostedZone:
+    Type: String
+    Default: jayforweb.com
   BucketName:
     Type: String
     Default: ghost.jayforweb.com
@@ -115,10 +118,25 @@ Resources:
             Resource:
               - !Sub "arn:aws:s3:::${BucketName}"
 
+  MyGhostHostedZone:
+    Type: "AWS::Route53::HostedZone"
+    Properties:
+      HostedZoneConfig:
+        Comment: 'Hosted zone for jayforweb.com test domain'
+      Name: !Ref HostedZone
+
 Outputs:
   MyGhostS3Bucket:
     Description: S3 Bucket for config file storage and backups
     Value: !Ref MyGhostS3Bucket
+    Export:
+      Name: PRIMARY-S3-BUCKET
+
+  MyHostedZone:
+    Description: Public hosted zone to hold DNS record sets
+    Value: !Ref MyGhostHostedZone
+    Export:
+      Name: PRIMARY-PUBLIC-HOSTED-ZONE
 
   MyGhostSG:
     Description: Security Group for the ghost host
