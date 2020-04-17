@@ -14,7 +14,6 @@ Parameters:
     Type: String
     Default: 'ghost.jayforweb.com'
 
-
 Resources:
   # SSM to manage the Ghost host
   MyGhostHostManagementRole:
@@ -48,33 +47,33 @@ Resources:
       AWS::CloudFormation::Init:
         config:
           commands:
-            "lets encrypt":
+            "01_lets_encrypt_cert_store":
               command: "sudo touch /data/traefik/acme.json"
-            "copy configs":
+            "02_copy_configs":
               command: "sudo aws s3 cp s3://ghost.jayforweb.com/blog/config/ /data/traefik/ --recursive"
-            "change config permissions":
+            "03_change_config_permissions":
               command: "sudo chmod 600 /data/traefik/*.*"
-            "update packages":
+            "04_update_packages":
               command: "sudo yum update -y"
-            "install docker":
+            "05_install_docker":
               command: "yes | sudo amazon-linux-extras install docker"
-            "start docker":
+            "06_start_docker":
               command: "sudo service docker start"
-            "add ec2 user to docker group":
+            "07_add_EC2_user_to_docker_group":
               command: "sudo usermod -a -G docker ec2-user"
-            "install git":
+            "08_install_Git":
               command: "sudo yum install -y git"
-            "download docker-compose":
+            "09_download_dockercompose":
               command: "curl -L https://github.com/docker/compose/releases/download/1.25.4/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose"
-            "make docker-compose executable":
+            "10_make_dockercompose_executable":
               command: "chmod +x /usr/local/bin/docker-compose"
-            "create a symlink to docker-compose":
+            "11_create_a_symlink_to_dockercompose":
               command: "sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose"
-            "create external-network":
+            "12_create_external_network":
               command: "docker network create external_network"
-            "create internal-network":
+            "13_create_internal_network":
               command: "docker network create internal_network"
-            "start all":
+            "14_start all":
               command: "docker-compose up -d"
               cwd: "/data/traefik/"
 
@@ -116,8 +115,8 @@ Resources:
   MyGhostMainRecordSet:
     Type: AWS::Route53::RecordSet
     Properties:
-      HostedZoneName :
-        - Fn::ImportValue: PRIMARY-PUBLIC-HOSTED-ZONE
+      HostedZoneId:
+        Fn::ImportValue: PRIMARY-PUBLIC-HOSTED-ZONE
       Name: jayforweb.com
       ResourceRecords:
       - !GetAtt MyGhostHostInstance.PublicIp
@@ -127,8 +126,8 @@ Resources:
   MyGhostSubDomainRecordSet:
     Type: AWS::Route53::RecordSet
     Properties:
-      HostedZoneName :
-        - Fn::ImportValue: PRIMARY-PUBLIC-HOSTED-ZONE
+      HostedZoneId:
+        Fn::ImportValue: PRIMARY-PUBLIC-HOSTED-ZONE
       Name: "*.jayforweb.com"
       ResourceRecords:
         - !GetAtt MyGhostHostInstance.PublicIp
