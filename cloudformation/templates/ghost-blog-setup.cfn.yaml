@@ -47,10 +47,10 @@ Resources:
       AWS::CloudFormation::Init:
         config:
           commands:
-            "01_lets_encrypt_cert_store":
-              command: "sudo touch /data/traefik/acme.json"
-            "02_copy_configs":
+            "01_copy_configs":
               command: "sudo aws s3 cp s3://ghost.jayforweb.com/blog/config/ /data/traefik/ --recursive"
+            "02_lets_encrypt_cert_store":
+              command: "sudo touch /data/traefik/acme.json"
             "03_change_config_permissions":
               command: "sudo chmod 600 /data/traefik/*.*"
             "04_update_packages":
