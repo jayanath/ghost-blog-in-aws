@@ -1,0 +1,197 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Configure the initial networking resources to deploy the Ghost blog host
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 192.168.0.0/16
+  PublicSubnetCidr:
+    Type: String
+    Default: 192.168.0.0/20 # Have 16 subnets for us to go multi tier multi-az if needed.
+  HostedZone:
+    Type: String
+    Default: jayforweb.com
+  BucketName:
+    Type: String
+    Default: ghost.jayforweb.com
+
+Resources:
+  MyGhostVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      Tags:
+        - Key: name
+          Value: Ghost Blog VPC
+
+  MyGhostSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyGhostVPC
+      CidrBlock: !Ref PublicSubnetCidr
+      Tags:
+        - Key: name
+          Value: Ghost Blog Subnet
+
+  MyGhostSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SecurityGroup for the Ghost Blog
+      GroupName: MyGhostSG
+      VpcId: !Ref MyGhostVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - FromPort: '443'
+          IpProtocol: tcp
+          ToPort: '443'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: name
+          Value: Ghost Blog SG
+
+  MyGhostIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: name
+        Value: Ghost Blog InternetGateway
+
+  MyGhostVpcIGWAttachment:
+      Type: "AWS::EC2::VPCGatewayAttachment"
+      Properties:
+        InternetGatewayId: !Ref MyGhostIGW
+        VpcId: !Ref MyGhostVPC
+
+  MyGhostRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyGhostVPC
+      Tags:
+      - Key: name
+        Value: Ghost Blog RouteTable
+
+  MyGhostRouteToIGW:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref MyGhostRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyGhostIGW
+
+  MyGhostSubnetToRoutTableAss:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref MyGhostRouteTable
+      SubnetId: !Ref MyGhostSubnet
+
+  MyGhostS3Bucket:
+    Type: AWS::S3::Bucket
+    #DeletionPolicy: Retain
+    Properties:
+      BucketName: !Ref BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MyGhostS3Bucket
+      PolicyDocument:
+        Statement:
+          -
+            Sid: GhostBucketAccess
+            Action:
+              - s3:*
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub ${AWS::AccountId}
+            Resource:
+              - !Sub "arn:aws:s3:::${BucketName}"
+
+  MyGhostHostedZone:
+    Type: "AWS::Route53::HostedZone"
+    Properties:
+      HostedZoneConfig:
+        Comment: 'Hosted zone for jayforweb.com test domain'
+      Name: !Ref HostedZone
+
+  MyMailGunMxRecordSet:
+    Type: AWS::Route53::RecordSet
+    DependsOn: MyGhostHostedZone
+    Properties:
+      HostedZoneName : !Ref MyGhostHostedZone
+      Name: mg.jayforweb.com.
+      ResourceRecords:
+        - 10 mxa.mailgun.org.
+        - 10 mxb.mailgun.org.
+      TTL: '300'
+      Type: MX
+
+  MyMailGunOrgRecordSet:
+    Type: AWS::Route53::RecordSet
+    DependsOn: MyGhostHostedZone
+    Properties:
+      HostedZoneName : !Ref MyGhostHostedZone
+      Name: mg.jayforweb.com.
+      ResourceRecords:
+        - '"v=spf1 include:mailgun.org ~all"'
+      TTL: '300'
+      Type: TXT
+
+  MyMailGunDomainKeyRecordSet:
+    Type: AWS::Route53::RecordSet
+    DependsOn: MyGhostHostedZone
+    Properties:
+      HostedZoneName : !Ref MyGhostHostedZone
+      Name: smtp._domainkey.mg.jayforweb.com.
+      ResourceRecords:
+        - >-
+          "{YOUR VERY LONG DOMAIN KEY GOES HERE}"
+      TTL: '300'
+      Type: TXT
+
+  MyMailGunCNAMERecordSet:
+    Type: AWS::Route53::RecordSet
+    DependsOn: MyGhostHostedZone
+    Properties:
+      HostedZoneName : !Ref MyGhostHostedZone
+      Name: email.mg.jayforweb.com.
+      ResourceRecords:
+        - mailgun.org
+      TTL: '300'
+      Type: CNAME
+
+Outputs:
+  MyGhostS3Bucket:
+    Description: S3 Bucket for config file storage and backups
+    Value: !Ref MyGhostS3Bucket
+    Export:
+      Name: PRIMARY-S3-BUCKET
+
+  MyHostedZone:
+    Description: Public hosted zone to hold DNS record sets
+    Value: !Ref MyGhostHostedZone
+    Export:
+      Name: PRIMARY-PUBLIC-HOSTED-ZONE
+
+  MyGhostSG:
+    Description: Security Group for the ghost host
+    Value: !Ref MyGhostSG
+    Export:
+      Name: PRIMARY-GHOST-SG
+
+  MyGhostSubnet:
+    Description: Subnet for the ghost host
+    Value: !Ref MyGhostSubnet
+    Export:
+      Name: PRIMARY-GHOST-SUBNET

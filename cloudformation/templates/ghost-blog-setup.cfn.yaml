@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Configure the Ghost blog host
+
+# inception.cfn.yaml template should be deployed before this template
+# as it creates the Hosted Zone, VPC and the rest of the networking resources.
+
+Parameters:
+  # Fetch the latest AMI without hard-coding the image id
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+  myGhostBucket:
+    Type: String
+    Default: 'ghost.jayforweb.com'
+
+Resources:
+  # SSM to manage the Ghost host
+  MyGhostHostManagementRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - ec2.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+
+  MyGhostHostInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref MyGhostHostManagementRole
+
+  MyGhostHostInstance:
+    Type: AWS::EC2::Instance
+    Metadata:
+      Comment: Install docker, ghost, traefik, commento
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            "01_copy_configs":
+              command: "sudo aws s3 cp s3://ghost.jayforweb.com/blog/config/ /data/traefik/ --recursive"
+            "02_lets_encrypt_cert_store":
+              command: "sudo touch /data/traefik/acme.json"
+            "03_change_config_permissions":
+              command: "sudo chmod 600 /data/traefik/*.*"
+            "04_update_packages":
+              command: "sudo yum update -y"
+            "05_install_docker":
+              command: "yes | sudo amazon-linux-extras install docker"
+            "06_start_docker":
+              command: "sudo service docker start"
+            "07_add_EC2_user_to_docker_group":
+              command: "sudo usermod -a -G docker ec2-user"
+            "08_install_Git":
+              command: "sudo yum install -y git"
+            "09_download_dockercompose":
+              command: "curl -L https://github.com/docker/compose/releases/download/1.25.4/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose"
+            "10_make_dockercompose_executable":
+              command: "chmod +x /usr/local/bin/docker-compose"
+            "11_create_a_symlink_to_dockercompose":
+              command: "sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose"
+            "12_create_external_network":
+              command: "docker network create external_network"
+            "13_create_internal_network":
+              command: "docker network create internal_network"
+            "14_start all":
+              command: "docker-compose up -d"
+              cwd: "/data/traefik/"
+
+      AWS::CloudFormation::Authentication:
+        rolebased:
+          type: "S3"
+          buckets:
+            - "myGhostBucket"
+          roleName:
+            Ref: "MyGhostHostManagementRole"
+
+    Properties:
+      IamInstanceProfile: !Ref MyGhostHostInstanceProfile
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet:
+            - Fn::ImportValue: PRIMARY-GHOST-SG
+          SubnetId:
+            Fn::ImportValue: PRIMARY-GHOST-SUBNET
+      Tags:
+        - Key: Name
+          Value: Ghost Blog Host Instance
+      UserData:
+        "Fn::Base64":
+          !Sub |
+            #!/bin/bash -xe
+            # Get the latest CloudFormation package
+            yum update -y aws-cfn-bootstrap
+            # Start cfn-init
+            /opt/aws/bin/cfn-init -s ${AWS::StackId} -r MyGhostHostInstance --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
+            # Start up the cfn-hup daemon to listen for changes to the EC2 instance metadata
+            /opt/aws/bin/cfn-hup || error_exit 'Failed to start cfn-hup'
+            # All done so signal success
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource MyGhostHostInstance --region ${AWS::Region}
+
+  MyGhostMainRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId:
+        Fn::ImportValue: PRIMARY-PUBLIC-HOSTED-ZONE
+      Name: jayforweb.com
+      ResourceRecords:
+      - !GetAtt MyGhostHostInstance.PublicIp
+      TTL: '300'
+      Type: A
+
+  MyGhostSubDomainRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId:
+        Fn::ImportValue: PRIMARY-PUBLIC-HOSTED-ZONE
+      Name: "*.jayforweb.com"
+      ResourceRecords:
+        - !GetAtt MyGhostHostInstance.PublicIp
+      TTL: '300'
+      Type: A
+
+Outputs:
+  InstanceId:
+    Description: The instance ID of the ghost server
+    Value:
+      Ref: MyGhostHostInstance
+  PublicIP:
+    Description: Public IP address of the ghost server
+    Value:
+      !GetAtt MyGhostHostInstance.PublicIp
