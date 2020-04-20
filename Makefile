@@ -1,6 +1,9 @@
 REGION=ap-southeast-2
 # Change if your profile name is different
-PROFILE=ghostdev
+PROFILE=ghostroot01
+
+copy-config-files:
+	aws s3 sync config s3://ghost.jayforweb.com/blog/config
 
 create-inception-stack:
 	aws cloudformation create-stack \
@@ -9,7 +12,7 @@ create-inception-stack:
 		--stack-name $(STACK_NAME) \
 		--template-body file://cloudformation/templates/inception.cfn.yaml
 
-create-blog-host-stack:
+create-blog-host-stack: copy-config-files
 	aws cloudformation create-stack \
 		--region $(REGION) \
 		--profile $(PROFILE) \
@@ -24,7 +27,7 @@ update-inception-stack:
 		--stack-name $(STACK_NAME) \
 		--template-body file://cloudformation/templates/inception.cfn.yaml
 
-update-blog-host-stack:
+update-blog-host-stack: copy-config-files
 	aws cloudformation update-stack \
 		--region $(REGION) \
 		--profile $(PROFILE) \

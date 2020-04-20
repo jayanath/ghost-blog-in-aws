@@ -2,13 +2,17 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Configure the Ghost blog host
 
 # inception.cfn.yaml template should be deployed before this template
-# as it creates the VPC and the rest of the networking resources.
+# as it creates the Hosted Zone, VPC and the rest of the networking resources.
 
 Parameters:
   # Fetch the latest AMI without hard-coding the image id
   LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+  myGhostBucket:
+    Type: String
+    Default: 'ghost.jayforweb.com'
 
 Resources:
   # SSM to manage the Ghost host
@@ -26,6 +30,8 @@ Resources:
               - "sts:AssumeRole"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
 
   MyGhostHostInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -37,141 +43,47 @@ Resources:
   MyGhostHostInstance:
     Type: AWS::EC2::Instance
     Metadata:
-      Comment: Install docker, ghost and traefik
+      Comment: Install docker, ghost, traefik, commento
       AWS::CloudFormation::Init:
         config:
-          files:
-            "/data/traefik/ghost.env":
-              content: !Sub |
-                mail__transport=SMTP
-                mail__from=Jay For Web <jayforweb@mg.jayforweb.com>
-                mail__options__service=mailgun
-                mail__options__auth__user=my-mailgun-user
-                mail__options__auth__pass=my-super-secret-password
-                url=https://jayforweb.com
-
-              mode: '000600'
-              owner: root
-              group: root
-
-            "/data/traefik/docker-compose.yaml":
-              content: !Sub |
-                version: "3"
-                networks:
-                  web:
-                    external: true
-
-                services:
-                  traefik:
-                    image: traefik:alpine
-                    restart: always
-                    ports:
-                      - "80:80"
-                      - "443:443"
-                    volumes:
-                      - /var/run/docker.sock:/var/run/docker.sock
-                      - /data/traefik/traefik.toml:/traefik.toml
-                      - /data/traefik/acme.json:/acme.json
-                    labels:
-                      - traefik.backend=traefik
-                      - traefik.enable=false
-                    networks:
-                      - web
-
-                  ghost:
-                    image: ghost:alpine
-                    restart: always
-                    env_file:
-                      - /data/traefik/ghost.env
-                    volumes:
-                      - /data/blogdir:/var/lib/ghost/content
-                    labels:
-                      - traefik.backend=friendlyghost
-                      - traefik.docker.network=web
-                      - traefik.frontend.rule=Host:jayforweb.com
-                      - traefik.port=2368
-                    networks:
-                      - web
-              mode: '000644'
-              owner: root
-              group: root
-
-            "/data/traefik/traefik.toml":
-              content: !Sub |
-                logLevel = "ERROR"
-
-                defaultEntryPoints = ["http", "https"]
-
-                [entryPoints]
-                [entryPoints.http]
-                address = ":80"
-
-                [entryPoints.http.redirect]
-                entryPoint = "https"
-                permanent = true
-
-                [entryPoints.https]
-                address = ":443"
-
-                [entryPoints.https.redirect]
-                regex = "^https://www.(.*)"
-                replacement = "https://$1"
-                permanent = true
-
-                [entryPoints.https.tls]
-                compress = true
-
-                [acme]
-                email = "jayanath@gmail.com"
-                storage = "acme.json"
-                entryPoint = "https"
-
-                [acme.tlsChallenge]
-                onHostRule = true
-
-                [acme.httpChallenge]
-                entryPoint = "http"
-
-                [[acme.domains]]
-                main = "jayforweb.com"
-                sans = ["www.jayforweb.com"]
-
-                [docker]
-                endpoint = "unix:///var/run/docker.sock"
-                domain = "jayforweb.com"
-                watch = true
-                network = "web"
-
-              mode: '000644'
-              owner: root
-              group: root
-
           commands:
-            "a":
-              command: "touch /data/traefik/acme.json"
-            "b":
-              command: "chmod 600 /data/traefik/acme.json"
-            "c":
+            "01_copy_configs":
+              command: "sudo aws s3 cp s3://ghost.jayforweb.com/blog/config/ /data/traefik/ --recursive"
+            "02_lets_encrypt_cert_store":
+              command: "sudo touch /data/traefik/acme.json"
+            "03_change_config_permissions":
+              command: "sudo chmod 600 /data/traefik/*.*"
+            "04_update_packages":
               command: "sudo yum update -y"
-            "d":
+            "05_install_docker":
               command: "yes | sudo amazon-linux-extras install docker"
-            "e":
+            "06_start_docker":
               command: "sudo service docker start"
-            "f":
+            "07_add_EC2_user_to_docker_group":
               command: "sudo usermod -a -G docker ec2-user"
-            "g":
+            "08_install_Git":
               command: "sudo yum install -y git"
-            "h":
+            "09_download_dockercompose":
               command: "curl -L https://github.com/docker/compose/releases/download/1.25.4/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose"
-            "i":
+            "10_make_dockercompose_executable":
               command: "chmod +x /usr/local/bin/docker-compose"
-            "j":
+            "11_create_a_symlink_to_dockercompose":
               command: "sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose"
-            "k":
-              command: "docker network create web"
-            "l":
+            "12_create_external_network":
+              command: "docker network create external_network"
+            "13_create_internal_network":
+              command: "docker network create internal_network"
+            "14_start all":
               command: "docker-compose up -d"
               cwd: "/data/traefik/"
+
+      AWS::CloudFormation::Authentication:
+        rolebased:
+          type: "S3"
+          buckets:
+            - "myGhostBucket"
+          roleName:
+            Ref: "MyGhostHostManagementRole"
 
     Properties:
       IamInstanceProfile: !Ref MyGhostHostInstanceProfile
@@ -200,36 +112,27 @@ Resources:
             # All done so signal success
             /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource MyGhostHostInstance --region ${AWS::Region}
 
-  MyGhostHostedZone:
-    Type: "AWS::Route53::HostedZone"
-    Properties:
-      HostedZoneConfig:
-        Comment: 'Hosted zone for jayforweb.com test domain'
-      Name: 'jayforweb.com'
-
   MyGhostMainRecordSet:
-    DependsOn: MyGhostHostedZone
     Type: AWS::Route53::RecordSet
     Properties:
-      HostedZoneId : !Ref MyGhostHostedZone
+      HostedZoneId:
+        Fn::ImportValue: PRIMARY-PUBLIC-HOSTED-ZONE
       Name: jayforweb.com
       ResourceRecords:
       - !GetAtt MyGhostHostInstance.PublicIp
       TTL: '300'
       Type: A
 
-  # TODO: need to check again about how to add www.jayforweb.com as an alias to jayforweb.com
-  # This can be done on console, but it gives an error here.
-
-  # MyGhostAliasRecordSet:
-  #   DependsOn: MyGhostMainRecordSet
-  #   Type: AWS::Route53::RecordSet
-  #   Properties:
-  #     Name: www.jayforweb.com
-  #     Type: A
-  #     AliasTarget:
-  #       HostedZoneId: !Ref MyGhostHostedZone
-  #       DNSName: jayforweb.com
+  MyGhostSubDomainRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId:
+        Fn::ImportValue: PRIMARY-PUBLIC-HOSTED-ZONE
+      Name: "*.jayforweb.com"
+      ResourceRecords:
+        - !GetAtt MyGhostHostInstance.PublicIp
+      TTL: '300'
+      Type: A
 
 Outputs:
   InstanceId:
