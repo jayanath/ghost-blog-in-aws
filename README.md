@@ -42,14 +42,13 @@ Once you clone the repository make sure to update the following files to reflect
 
 5. inception.cfn.yaml
    
-   * search for `jayforewb.com` and replace with your domain.
+   * Update `HostedZone` with your domain
+   * Update `BucketName` with your S3 bucket name
 
 6. Makefile
    
    * Update the profile value to your AWS CLI profile
 
-****Note: I have to work a bit more to reduce the number of places that we have to 
-update before deployment. 
 
 ## Initial deployment
 1. Deploy the `inception stack` - this creates the initial infrastructure in the AWS account

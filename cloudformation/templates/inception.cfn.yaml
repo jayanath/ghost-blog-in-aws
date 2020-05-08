@@ -122,7 +122,7 @@ Resources:
     Type: "AWS::Route53::HostedZone"
     Properties:
       HostedZoneConfig:
-        Comment: 'Hosted zone for jayforweb.com test domain'
+        Comment: 'Hosted zone for the ghost domain'
       Name: !Ref HostedZone
 
   MyMailGunMxRecordSet:
@@ -130,7 +130,7 @@ Resources:
     DependsOn: MyGhostHostedZone
     Properties:
       HostedZoneName : !Ref MyGhostHostedZone
-      Name: mg.jayforweb.com.
+      Name: !Sub mg.${HostedZone}.
       ResourceRecords:
         - 10 mxa.mailgun.org.
         - 10 mxb.mailgun.org.
@@ -142,7 +142,7 @@ Resources:
     DependsOn: MyGhostHostedZone
     Properties:
       HostedZoneName : !Ref MyGhostHostedZone
-      Name: mg.jayforweb.com.
+      Name: !Sub mg.${HostedZone}.
       ResourceRecords:
         - '"v=spf1 include:mailgun.org ~all"'
       TTL: '300'
@@ -153,7 +153,7 @@ Resources:
     DependsOn: MyGhostHostedZone
     Properties:
       HostedZoneName : !Ref MyGhostHostedZone
-      Name: smtp._domainkey.mg.jayforweb.com.
+      Name: !Sub smtp._domainkey.mg.${HostedZone}.
       ResourceRecords:
         - >-
           "{YOUR VERY LONG DOMAIN KEY GOES HERE}"
@@ -165,7 +165,7 @@ Resources:
     DependsOn: MyGhostHostedZone
     Properties:
       HostedZoneName : !Ref MyGhostHostedZone
-      Name: email.mg.jayforweb.com.
+      Name: !Sub email.mg.${HostedZone}.
       ResourceRecords:
         - mailgun.org
       TTL: '300'
