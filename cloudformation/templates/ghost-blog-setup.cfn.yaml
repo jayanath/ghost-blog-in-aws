@@ -14,6 +14,11 @@ Parameters:
     Type: String
     Default: 'ghost.jayforweb.com'
 
+  # Change this to match your own domain
+  myGhostDomain:
+    Type: String
+    Default: 'jayforweb.com'
+
 Resources:
   # SSM to manage the Ghost host
   MyGhostHostManagementRole:
@@ -117,7 +122,7 @@ Resources:
     Properties:
       HostedZoneId:
         Fn::ImportValue: PRIMARY-PUBLIC-HOSTED-ZONE
-      Name: jayforweb.com
+      Name: !Ref myGhostDomain
       ResourceRecords:
       - !GetAtt MyGhostHostInstance.PublicIp
       TTL: '300'
@@ -128,7 +133,7 @@ Resources:
     Properties:
       HostedZoneId:
         Fn::ImportValue: PRIMARY-PUBLIC-HOSTED-ZONE
-      Name: "*.jayforweb.com"
+      Name: !Sub "*.${myGhostDomain}"
       ResourceRecords:
         - !GetAtt MyGhostHostInstance.PublicIp
       TTL: '300'
