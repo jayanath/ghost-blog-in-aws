@@ -78,9 +78,6 @@ Resources:
               command: "docker network create external_network"
             "13_create_internal_network":
               command: "docker network create internal_network"
-            "14_start all":
-              command: "docker-compose up -d"
-              cwd: "/data/traefik/"
 
       AWS::CloudFormation::Authentication:
         rolebased:
