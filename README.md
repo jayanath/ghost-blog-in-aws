@@ -44,6 +44,7 @@ Once you clone the repository make sure to update the following files to reflect
    
    * Update `HostedZone` with your domain
    * Update `BucketName` with your S3 bucket name
+   * Update `MyMailGunDomainKeyRecordSet` resource with your domain key
 
 6. Makefile
    
