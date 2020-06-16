@@ -92,12 +92,9 @@ Resources:
       InstanceType: t2.micro
       ImageId: !Ref LatestAmiId
       NetworkInterfaces:
-        - AssociatePublicIpAddress: "true"
-          DeviceIndex: "0"
-          GroupSet:
-            - Fn::ImportValue: PRIMARY-GHOST-SG
-          SubnetId:
-            Fn::ImportValue: PRIMARY-GHOST-SUBNET
+        - NetworkInterfaceId:
+            Fn::ImportValue: PRIMARY-NETWORK-XFACE-ID
+          DeviceIndex: 0       
       Tags:
         - Key: Name
           Value: Ghost Blog Host Instance
@@ -121,7 +118,7 @@ Resources:
         Fn::ImportValue: PRIMARY-PUBLIC-HOSTED-ZONE
       Name: !Ref myGhostDomain
       ResourceRecords:
-      - !GetAtt MyGhostHostInstance.PublicIp
+      - Fn::ImportValue: PRIMARY-EIP
       TTL: '300'
       Type: A
 
@@ -132,7 +129,7 @@ Resources:
         Fn::ImportValue: PRIMARY-PUBLIC-HOSTED-ZONE
       Name: !Sub "*.${myGhostDomain}"
       ResourceRecords:
-        - !GetAtt MyGhostHostInstance.PublicIp
+        - Fn::ImportValue: PRIMARY-EIP
       TTL: '300'
       Type: A
 
@@ -144,4 +141,4 @@ Outputs:
   PublicIP:
     Description: Public IP address of the ghost server
     Value:
-      !GetAtt MyGhostHostInstance.PublicIp
+      Fn::ImportValue: PRIMARY-EIP
