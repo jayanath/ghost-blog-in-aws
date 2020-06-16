@@ -127,23 +127,6 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
 
-  S3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref MyGhostS3Bucket
-      PolicyDocument:
-        Statement:
-          -
-            Sid: GhostBucketAccess
-            Action:
-              - s3:*
-            Effect: Allow
-            Principal:
-              AWS:
-                - !Sub ${AWS::AccountId}
-            Resource:
-              - !Sub "arn:aws:s3:::${BucketName}"
-
   MyGhostHostedZone:
     Type: "AWS::Route53::HostedZone"
     Properties:
