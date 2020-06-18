@@ -1,11 +1,17 @@
-# Deploy your own blog in AWS using Ghost platform
+# Deploy Ghost blog in AWS using CloudFormation
 
 Ghost is a lightweight blogging platform. This repository contains CloudFormation scripts and other resources 
-to deploy your own Ghost blog stack in AWS with a very little effort. 
+to deploy your own Ghost blog stack in AWS. 
 
-Below is the high level design of the entire stack. It uses Ghost as the blogging platform, Traefik as the reverse proxy
-and Commento as the commenting platform that works with a PostgreSQL database. Everything is running on docker inside an
-EC2 instance on AWS. Docker-compose is used for the container orchestration.
+The stack runs 4 docker containers inside an EC2 instance.
+  1. Ghost -  blogging platform
+  2. Traefik - reverse proxy
+  3. Commento - commenting platform
+  4. PostgreSQL - commento database 
+
+Docker-compose is used for the container orchestration.
+
+Below is the high level design. 
 
 ![blog-design](diagrams/aws-ghost-hosting.png)
 
@@ -26,13 +32,12 @@ Once you clone the repository make sure to update the following files to reflect
    
    * `COMMENTO_POSTGRES`
 
-2. ghost.env
+2. ghost.env - add your smtp details here
 3. docker-compose.yaml
+   
    Update the following lines
     
    * `certificatesresolvers.letsencrypt.acme.email={YOUR EMAIL}`
-   * `traefik.http.routers.traefik.rule=Host(dashboard.{YOUR DOMAIN})`
-   * `traefik.http.middlewares.dashboardauth.basicauth.users={USER}:{PASSWORD generated using htpasswd}`
    * `traefik.http.routers.ghost.rule=Host({YOUR DOMAIN})`
    * `traefik.http.routers.commento.rule=Host(commento.{YOUR DOMAIN})`
 
@@ -42,34 +47,58 @@ Once you clone the repository make sure to update the following files to reflect
 
 5. inception.cfn.yaml
    
-   * search for `jayforewb.com` and replace with your domain.
+   * Update `HostedZone` with your domain
+   * Update `MyMailGunDomainKeyRecordSet` resource with your domain key
 
 6. Makefile
    
-   * Update the profile value to your AWS CLI profile
+   * Update `REGION`, `PROFILE` and `BUCKET` values
 
-****Note: I have to work a bit more to reduce the number of places that we have to 
-update before deployment. 
 
 ## Initial deployment
 1. Deploy the `inception stack` - this creates the initial infrastructure in the AWS account
-2. Deploy the `blog-host stack` - this configures and starts your own Ghost blog
+    - `make create-inception-stack STACK_NAME=inception-stack-name`
+2. Deploy the `blog-host stack` - this deployes and configures the Ghost host
+    - `make create-blog-host-stack STACK_NAME=host-stack-name` 
+
+Check CloudFormation stacks for any errors.
 
 ## After deployment
-1. Register yourself to new commento on https://commento.yourdomain.com
-2. Use AWS SSM to log into the EC2, navigate to /data/traefik folder and bring down the stack with `docker-compose down`
-3. Uncomment smtp setup values in `commento.env`
-4. Start docker compose with `docker-compose up -d`
-5. Register your admin user with ghost on https://yourdomain.com/ghost
+1. Use AWS SSM to log into the Ghost host, navigate to /data/traefik folder and bring up the stack with `docker-compose up -d`
+2. Register your admin user with ghost on https://yourdomain.com/ghost
+3. Register yourself to the local commento on https://commento.yourdomain.com
+4. Use AWS SSM to log into the Ghost host, navigate to /data/traefik folder and bring down the stack with `docker-compose down`
+5. Uncomment smtp setup values in `commento.env`
+6. Uncomment `COMMENTO_FORBID_NEW_OWNERS=true` to avoid new registered users 
+6. Bring up the stack again with `docker-compose up -d`
 
+## How to backup the blog configs and content
+1. In the Ghost host: `cd /data/traefik`
+2. Set `BUCKET` value in `backup-all.sh`
+3. `./backup-all.sh`
 
-Have a look at https://fewmorewords.com/ghost-on-aws/. 
+This will backup all the content and config files into the S3. 
 
+## How to update all the components
+1. In the Ghost host: `cd /data/traefik`
+2. Set `BUCKET` value in `update-components.sh`
+3. `./update-components.sh`
+
+This will pull new docker images and update the stack.
+
+## Further info
+Have a look at https://fewmorewords.com/ghost-on-aws 
 
 It explains everything in detail.
 
-If you have any questions/suggestions, please feel free to drop a line at https://fewmorewords.com
+## Demo blog
 
 The fully working demo site is available on https://jayforweb.com
+
+## Reference
+1. https://ghost.org/
+2. https://containo.us/traefik/
+3. https://commento.io/
+
 
 Enjoy!

@@ -10,10 +10,10 @@ Parameters:
     Default: 192.168.0.0/20 # Have 16 subnets for us to go multi tier multi-az if needed.
   HostedZone:
     Type: String
-    Default: jayforweb.com
+    Default: mydomain.com
   BucketName:
     Type: String
-    Default: ghost.jayforweb.com
+    Default: ghost.mydomain.com
 
 Resources:
   MyGhostVPC:
@@ -24,6 +24,14 @@ Resources:
         - Key: name
           Value: Ghost Blog VPC
 
+  MyGhostEIP:
+    Type: AWS::EC2::EIP
+    Properties: 
+      Domain: vpc
+      Tags: 
+        - Key: name
+          Value: Ghost host EIP
+    
   MyGhostSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -52,6 +60,23 @@ Resources:
         - Key: name
           Value: Ghost Blog SG
 
+  MyGhostNetworkXface:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref MyGhostSubnet
+      Description: Network Interface for the ghost host
+      GroupSet: 
+      - !Ref MyGhostSG
+      Tags:
+      - Key: name
+        Value: Ghost Host NetworkInterface
+
+  MyGhostEipAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt MyGhostEIP.AllocationId
+      NetworkInterfaceId: !Ref MyGhostNetworkXface
+
   MyGhostIGW:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -60,10 +85,11 @@ Resources:
         Value: Ghost Blog InternetGateway
 
   MyGhostVpcIGWAttachment:
-      Type: "AWS::EC2::VPCGatewayAttachment"
-      Properties:
-        InternetGatewayId: !Ref MyGhostIGW
-        VpcId: !Ref MyGhostVPC
+    DependsOn: MyGhostEIP 
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref MyGhostIGW
+      VpcId: !Ref MyGhostVPC
 
   MyGhostRouteTable:
     Type: AWS::EC2::RouteTable
@@ -101,36 +127,19 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
 
-  S3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref MyGhostS3Bucket
-      PolicyDocument:
-        Statement:
-          -
-            Sid: GhostBucketAccess
-            Action:
-              - s3:*
-            Effect: Allow
-            Principal:
-              AWS:
-                - !Sub ${AWS::AccountId}
-            Resource:
-              - !Sub "arn:aws:s3:::${BucketName}"
-
   MyGhostHostedZone:
     Type: "AWS::Route53::HostedZone"
     Properties:
       HostedZoneConfig:
-        Comment: 'Hosted zone for jayforweb.com test domain'
+        Comment: 'Hosted zone for the ghost domain'
       Name: !Ref HostedZone
 
   MyMailGunMxRecordSet:
     Type: AWS::Route53::RecordSet
     DependsOn: MyGhostHostedZone
     Properties:
-      HostedZoneName : !Ref MyGhostHostedZone
-      Name: mg.jayforweb.com.
+      HostedZoneId: !Ref MyGhostHostedZone
+      Name: !Sub mg.${HostedZone}.
       ResourceRecords:
         - 10 mxa.mailgun.org.
         - 10 mxb.mailgun.org.
@@ -141,8 +150,8 @@ Resources:
     Type: AWS::Route53::RecordSet
     DependsOn: MyGhostHostedZone
     Properties:
-      HostedZoneName : !Ref MyGhostHostedZone
-      Name: mg.jayforweb.com.
+      HostedZoneId: !Ref MyGhostHostedZone
+      Name: !Sub mg.${HostedZone}.
       ResourceRecords:
         - '"v=spf1 include:mailgun.org ~all"'
       TTL: '300'
@@ -152,11 +161,11 @@ Resources:
     Type: AWS::Route53::RecordSet
     DependsOn: MyGhostHostedZone
     Properties:
-      HostedZoneName : !Ref MyGhostHostedZone
-      Name: smtp._domainkey.mg.jayforweb.com.
-      ResourceRecords:
+      HostedZoneId: !Ref MyGhostHostedZone
+      Name: !Sub smtp._domainkey.mg.${HostedZone}.
+      ResourceRecords: # If your key is longer than 255 characters split it into "long""key" without any line break
         - >-
-          "{YOUR VERY LONG DOMAIN KEY GOES HERE}"
+          "YOUR VERY LONG""DOMAIN KEY GOES HERE"
       TTL: '300'
       Type: TXT
 
@@ -164,14 +173,26 @@ Resources:
     Type: AWS::Route53::RecordSet
     DependsOn: MyGhostHostedZone
     Properties:
-      HostedZoneName : !Ref MyGhostHostedZone
-      Name: email.mg.jayforweb.com.
+      HostedZoneId: !Ref MyGhostHostedZone
+      Name: !Sub email.mg.${HostedZone}.
       ResourceRecords:
         - mailgun.org
       TTL: '300'
       Type: CNAME
 
 Outputs:
+  MyGhostEIP:
+    Description: EIP to be used on the ghost host
+    Value: !Ref MyGhostEIP
+    Export:
+      Name: PRIMARY-EIP
+
+  MyGhostNetworkXface:
+    Description: Network Interface ID to be used with ghost host
+    Value: !Ref MyGhostNetworkXface
+    Export:
+      Name: PRIMARY-NETWORK-XFACE-ID    
+
   MyGhostS3Bucket:
     Description: S3 Bucket for config file storage and backups
     Value: !Ref MyGhostS3Bucket
@@ -183,15 +204,3 @@ Outputs:
     Value: !Ref MyGhostHostedZone
     Export:
       Name: PRIMARY-PUBLIC-HOSTED-ZONE
-
-  MyGhostSG:
-    Description: Security Group for the ghost host
-    Value: !Ref MyGhostSG
-    Export:
-      Name: PRIMARY-GHOST-SG
-
-  MyGhostSubnet:
-    Description: Subnet for the ghost host
-    Value: !Ref MyGhostSubnet
-    Export:
-      Name: PRIMARY-GHOST-SUBNET
