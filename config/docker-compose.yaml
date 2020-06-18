@@ -17,7 +17,7 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.letsencrypt.acme.email=jayanath@gmail.com"
+      - "--certificatesresolvers.letsencrypt.acme.email={MY-EMAIL-GOES-HERE}"
       - "--certificatesresolvers.letsencrypt.acme.storage=acme.json"
     ports:
       - "80:80"
@@ -27,13 +27,6 @@ services:
       - /data/traefik/acme.json:/acme.json
     labels:
       - traefik.enable=true
-      # Dashboard
-      - traefik.http.routers.traefik.rule=Host(`dashboard.jayforweb.com`)
-      - traefik.http.routers.traefik.service=api@internal
-      - traefik.http.routers.traefik.tls.certresolver=letsencrypt
-      - traefik.http.routers.traefik.entrypoints=websecure
-      - traefik.http.routers.traefik.middlewares=dashboardauth
-      - traefik.http.middlewares.dashboardauth.basicauth.users=admin:$$apr1$$EcrvPa/i$$r4.HLJnYw/FNaGLCoIyPI1
       # HTTPS Redirect
       - traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)
       - traefik.http.routers.http-catchall.entrypoints=web
@@ -52,7 +45,7 @@ services:
       - /data/blogdir:/var/lib/ghost/content
     labels:
       - traefik.enable=true
-      - traefik.http.routers.ghost.rule=Host(`jayforweb.com`)
+      - traefik.http.routers.ghost.rule=Host(`mydomain.com`)
       - traefik.http.routers.ghost.entrypoints=websecure
       - traefik.http.routers.ghost.tls.certresolver=letsencrypt
       - traefik.http.services.ghost.loadbalancer.server.port=2368
@@ -68,7 +61,7 @@ services:
       - db
     labels:
       - traefik.enable=true
-      - traefik.http.routers.commento.rule=Host(`commento.jayforweb.com`)
+      - traefik.http.routers.commento.rule=Host(`commento.mydomain.com`)
       - traefik.http.routers.commento.entrypoints=websecure
       - traefik.http.routers.commento.tls.certresolver=letsencrypt
     networks:
@@ -80,8 +73,8 @@ services:
     restart: always
     environment:
       POSTGRES_DB: commento
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: MY-USER
+      POSTGRES_PASSWORD: MY-PASSWORD
     networks:
       - internal_network
     volumes:
