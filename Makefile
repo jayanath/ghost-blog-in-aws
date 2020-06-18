@@ -1,9 +1,10 @@
-REGION=ap-southeast-2
-# Change if your profile name is different
-PROFILE=ghostroot01
+# Set your default values
+REGION={MY-AWS-REGION}
+PROFILE={MY-AWS-CLI-PROFILE}
+BUCKET={MY-S3-BUCKET}
 
 copy-config-files:
-	aws s3 sync config s3://ghost.jayforweb.com/blog/config
+	aws s3 sync config s3://$(BUCKET)/blog/config
 
 create-inception-stack:
 	aws cloudformation create-stack \
