@@ -10,10 +10,6 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 
-  myGhostBucket:
-    Type: String
-    Default: 'ghost.jayforweb.com'
-
   # Change this to match your own domain
   myGhostDomain:
     Type: String
@@ -53,7 +49,7 @@ Resources:
         config:
           commands:
             "01_copy_configs":
-              command: "sudo aws s3 cp s3://ghost.jayforweb.com/blog/config/ /data/traefik/ --recursive"
+              command: "sudo aws s3 cp s3://{MY-BUCKET-NAME}/blog/config/ /data/traefik/ --recursive"
             "02_lets_encrypt_cert_store":
               command: "sudo touch /data/traefik/acme.json"
             "03_change_config_permissions":
@@ -69,7 +65,7 @@ Resources:
             "08_install_Git":
               command: "sudo yum install -y git"
             "09_download_dockercompose":
-              command: "curl -L https://github.com/docker/compose/releases/download/1.25.4/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose"
+              command: "curl -L https://github.com/docker/compose/releases/download/1.26.0/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose"
             "10_make_dockercompose_executable":
               command: "chmod +x /usr/local/bin/docker-compose"
             "11_create_a_symlink_to_dockercompose":
@@ -83,7 +79,7 @@ Resources:
         rolebased:
           type: "S3"
           buckets:
-            - "myGhostBucket"
+            - Fn::ImportValue: PRIMARY-S3-BUCKET
           roleName:
             Ref: "MyGhostHostManagementRole"
 
@@ -138,7 +134,3 @@ Outputs:
     Description: The instance ID of the ghost server
     Value:
       Ref: MyGhostHostInstance
-  PublicIP:
-    Description: Public IP address of the ghost server
-    Value:
-      Fn::ImportValue: PRIMARY-EIP
