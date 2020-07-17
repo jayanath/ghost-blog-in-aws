@@ -1,7 +1,7 @@
 # Deploy Ghost blog in AWS using CloudFormation
 
 Ghost is a lightweight blogging platform. This repository contains CloudFormation scripts and other resources 
-to deploy your own Ghost blog stack in AWS. 
+to deploy your own Ghost blog stack in AWS. This is not designed to be production ready but to host a personal blog with minumal cost using AWS free tier :-)
 
 The stack runs 4 docker containers inside an EC2 instance.
   1. Ghost -  blogging platform
@@ -87,13 +87,9 @@ This will backup all the content and config files into the S3.
 This will pull new docker images and update the stack.
 
 ## Further info
-Have a look at https://fewmorewords.com/ghost-on-aws 
+Have a look at my blog https://fewmorewords.com/ghost-on-aws 
 
-It explains everything in detail.
-
-## Demo blog
-
-The fully working demo site is available on https://jayforweb.com
+It is deployed using this stack and only costs me less than a dollar per month :-) with AWS free tier
 
 ## Reference
 1. https://ghost.org/
