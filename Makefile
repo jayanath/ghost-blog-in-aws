@@ -4,7 +4,8 @@ PROFILE={MY-AWS-CLI-PROFILE}
 BUCKET={MY-S3-BUCKET}
 
 copy-config-files:
-	aws s3 sync config s3://$(BUCKET)/blog/config
+	aws s3 sync config s3://$(BUCKET)/blog/config \
+		--profile $(PROFILE)
 
 create-inception-stack:
 	aws cloudformation create-stack \
