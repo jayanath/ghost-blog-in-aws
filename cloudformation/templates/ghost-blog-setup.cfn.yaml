@@ -65,7 +65,7 @@ Resources:
             "08_install_Git":
               command: "sudo yum install -y git"
             "09_download_dockercompose":
-              command: "curl -L https://github.com/docker/compose/releases/download/1.26.0/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose"
+              command: "curl -L https://github.com/docker/compose/releases/download/1.29.1/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose"
             "10_make_dockercompose_executable":
               command: "chmod +x /usr/local/bin/docker-compose"
             "11_create_a_symlink_to_dockercompose":
