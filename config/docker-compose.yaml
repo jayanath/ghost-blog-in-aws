@@ -37,7 +37,7 @@ services:
       - external_network
 
   ghost:
-    image: ghost:alpine
+    image: ghost:4
     restart: always
     env_file:
       - /data/traefik/ghost.env
